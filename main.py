@@ -19,7 +19,9 @@ from startup_manager import get_startup_executables, remove_from_startup, regist
 from close_counter import CloseCounter
 from popup import PopupManager
 from tray import TrayIcon
+from splash import show_splash
 from tray import TrayIcon
+from splash import show_splash
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +126,7 @@ class CloseUtility:
     # ------------------------------------------------------------------
 
     def run(self):
+        show_splash()
         self.tray.run_in_thread()
         print("[Main] Icône system tray active.")
 
