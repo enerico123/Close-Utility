@@ -20,8 +20,7 @@ from close_counter import CloseCounter
 from popup import PopupManager
 from tray import TrayIcon
 from splash import show_splash
-from tray import TrayIcon
-from splash import show_splash
+import tkinter as tk
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +69,10 @@ class CloseUtility:
         register_self()
 
         # Icône system tray
-        self.tray = TrayIcon(on_quit=self._on_quit_requested)
+        self.tray = TrayIcon(
+            on_quit=self._on_quit_requested,
+            get_stats=lambda: (len(self.startup_exes), len(self.ignore_list)),
+        )
 
         self.popup_manager = PopupManager(
             on_yes=self._on_yes,
@@ -139,9 +141,15 @@ class CloseUtility:
         watcher_thread.start()
         print("[Main] Watcher démarré. Close Utility est actif.")
 
+        # Donne la ref tkinter au tray une fois la boucle prête
+        self.popup_manager._root = tk.Tk()
+        self.popup_manager._root.withdraw()
+        self.tray.set_tk_root(self.popup_manager._root)
+        self.popup_manager._poll()
+
         # Boucle tkinter — bloquante, dans le thread principal
         try:
-            self.popup_manager.start_loop()
+            self.popup_manager._root.mainloop()
         except KeyboardInterrupt:
             print("\n[Main] Arrêt demandé.")
             self.counter.stop()
