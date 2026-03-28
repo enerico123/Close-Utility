@@ -15,9 +15,11 @@ import json
 import os
 from pathlib import Path
 
-from startup_manager import get_startup_executables, remove_from_startup
+from startup_manager import get_startup_executables, remove_from_startup, register_self
 from close_counter import CloseCounter
 from popup import PopupManager
+from tray import TrayIcon
+from tray import TrayIcon
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,12 @@ class CloseUtility:
         print(f"[Main] {len(self.startup_exes)} apps surveillées.")
         print(f"[Main] {len(self.ignore_list)} apps ignorées : {self.ignore_list or 'aucune'}")
 
+        # Auto-enregistrement au démarrage Windows
+        register_self()
+
+        # Icône system tray
+        self.tray = TrayIcon(on_quit=self._on_quit_requested)
+
         self.popup_manager = PopupManager(
             on_yes=self._on_yes,
             on_no=self._on_no,
@@ -104,11 +112,21 @@ class CloseUtility:
             self.counter.reset_counter(exe_name)
             print(f"[Main] Compteur de '{exe_name}' remis à zéro.")
 
+    def _on_quit_requested(self):
+        """Appelé depuis le menu Quitter de la system tray."""
+        print("[Main] Arrêt de Close Utility.")
+        self.counter.stop()
+        if self.popup_manager._root:
+            self.popup_manager._root.quit()
+
     # ------------------------------------------------------------------
     # Démarrage
     # ------------------------------------------------------------------
 
     def run(self):
+        self.tray.run_in_thread()
+        print("[Main] Icône system tray active.")
+
         # Thread watcher — tourne en daemon (s'arrête avec le process principal)
         watcher_thread = threading.Thread(
             target=self.counter.run,

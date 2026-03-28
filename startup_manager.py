@@ -7,6 +7,7 @@ Pas besoin de droits admin — scope utilisateur courant uniquement.
 
 import winreg
 import re
+import sys
 from pathlib import Path
 
 
@@ -29,18 +30,16 @@ def _parse_exe_from_value(value: str) -> str:
     value = value.strip()
 
     # Cas --processStart : le vrai process est l'argument qui suit
-    # ex: Update.exe --processStart Discord.exe
     match = re.search(r'--processStart\s+(\S+\.exe)', value, re.IGNORECASE)
     if match:
         return match.group(1).lower()
 
-    # Chemin entre guillemets : "C:\path with spaces\app.exe" args...
+    # Chemin entre guillemets
     match = re.match(r'"([^"]+\.exe)"', value, re.IGNORECASE)
     if match:
         return Path(match.group(1)).name.lower()
 
-    # Chemin sans guillemets : on cherche le premier token finissant par .exe
-    # en recollant depuis le début pour gérer les espaces dans le chemin
+    # Chemin sans guillemets
     tokens = value.split()
     for i, token in enumerate(tokens):
         if token.lower().endswith('.exe'):
@@ -56,7 +55,6 @@ def get_startup_entries() -> dict[str, str]:
 
     Returns:
         dict {nom_entrée: valeur_brute_registre}
-        ex: {"Discord": '"C:\\...\\Update.exe" --processStart Discord.exe'}
     """
     entries = {}
     try:
@@ -78,11 +76,7 @@ def get_startup_entries() -> dict[str, str]:
 def get_startup_executables() -> dict[str, str]:
     """
     Retourne un mapping {nom_exe_normalisé: nom_entrée_registre}.
-    Utile pour faire le lien entre un process psutil et une entrée registre.
-
     ex: {"discord.exe": "Discord", "steam.exe": "Steam"}
-
-    Note : si un exe n'est pas parsable il est ignoré avec un warning.
     """
     entries = get_startup_entries()
     result = {}
@@ -97,13 +91,61 @@ def get_startup_executables() -> dict[str, str]:
     return result
 
 
+def add_to_startup(entry_name: str, cmd: str) -> bool:
+    """
+    Ajoute une entrée au démarrage automatique.
+
+    Args:
+        entry_name: nom de l'entrée registre, ex: "CloseUtility"
+        cmd:        commande complète, ex: '"C:\\...\\pythonw.exe" "C:\\...\\main.py"'
+
+    Returns:
+        True si ajouté avec succès, False sinon.
+    """
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_KEY, 0, winreg.KEY_WRITE) as key:
+            winreg.SetValueEx(key, entry_name, 0, winreg.REG_SZ, cmd)
+            print(f"[StartupManager] '{entry_name}' ajouté au démarrage.")
+            return True
+    except OSError as e:
+        print(f"[StartupManager] Erreur lors de l'ajout de '{entry_name}' : {e}")
+        return False
+
+
+def register_self() -> bool:
+    """
+    Ajoute Close Utility lui-même au démarrage Windows.
+    Utilise pythonw.exe pour tourner sans fenêtre console.
+
+    Returns:
+        True si déjà présent ou ajouté avec succès.
+    """
+    entry_name = "CloseUtility"
+
+    # Déjà présent ?
+    if entry_name in get_startup_entries():
+        print("[StartupManager] Close Utility est déjà dans le démarrage.")
+        return True
+
+    # pythonw.exe = Python sans fenêtre console noire au démarrage
+    python_dir = Path(sys.executable).parent
+    pythonw = python_dir / "pythonw.exe"
+    if not pythonw.exists():
+        pythonw = Path(sys.executable)  # fallback
+
+    script_path = Path(__file__).parent.resolve() / "main.py"
+    cmd = f'"{pythonw}" "{script_path}"'
+
+    print(f"[StartupManager] Enregistrement : {cmd}")
+    return add_to_startup(entry_name, cmd)
+
+
 def remove_from_startup(entry_name: str) -> bool:
     """
     Supprime une entrée du démarrage automatique.
 
     Args:
-        entry_name: le nom de l'entrée registre (pas le nom de l'exe)
-                    ex: "Discord", "Steam"
+        entry_name: le nom de l'entrée registre, ex: "Discord", "Steam"
 
     Returns:
         True si supprimé avec succès, False sinon.
@@ -143,6 +185,5 @@ if __name__ == "__main__":
         print(f"  [{name}]  →  {path}")
 
     print("\n=== Mapping exe → nom registre ===")
-    mapping = get_startup_executables()
-    for exe, reg_name in mapping.items():
+    for exe, reg_name in get_startup_executables().items():
         print(f"  {exe}  →  {reg_name}")
