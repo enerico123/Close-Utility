@@ -22,7 +22,7 @@ AMBIGUOUS_EXES = {
     "agent.exe",
 }
 
-CLOSE_THRESHOLD = 3  # Nombre de fermetures avant de déclencher le popup
+CLOSE_THRESHOLD = 1  # Nombre de fermetures avant de déclencher le popup
 
 
 class CloseCounter:
